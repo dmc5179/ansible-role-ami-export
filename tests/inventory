@@ -1,2 +1,11 @@
+[all]
 localhost
 
+[all:vars]
+
+ansible_ssh_private_key_file=/home/danclark/.ssh/danclark-personal.pem
+ansible_connection=local
+ansible_user=ec2-user
+#ansible_become=yes
+ansible_become_method=sudo
+ansible_become_user=root

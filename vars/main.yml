@@ -1,2 +1,4 @@
 ---
 # vars file for ami-export
+
+aws_ssl_enabled: true

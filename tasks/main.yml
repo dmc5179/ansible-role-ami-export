@@ -1,2 +1,96 @@
 ---
 # tasks file for ami-export
+
+- name: Get snapshot ID of target AMI
+  delegate_to: localhost
+  amazon.aws.ec2_ami_info:
+    aws_access_key: "{{ ansible_env.AWS_ACCESS_KEY_ID | default(omit) }}"
+    aws_secret_key: "{{ ansible_env.AWS_SECRET_ACCESS_KEY | default(omit) }}"
+    security_token: "{{ ansible_env.AWS_SESSION_TOKEN | default(omit) }}"
+    region: "{{ ansible_env.AWS_DEFAULT_REGION | default(omit) }}"
+    ec2_url: '{{ aws_ec2_url | default(omit) }}'
+    validate_certs: '{{ aws_ssl_enabled }}'
+    image_ids: '{{ ami_id }}'
+  register: ami_info
+
+- name: Set snapshot ID fact
+  ansible.builtin.set_facts:
+    snapshot_id: "{{ ami_info.images[0].block_device_mappings[0].ebs.snapshot_id }}"
+    volume_size: "{{ ami_info.images[0].block_device_mappings[0].ebs.volume_size }}"
+
+- fail:
+
+- name: Create temp instance
+  delegate_to: localhost
+  community.aws.ec2_instance:
+    aws_access_key: "{{ ansible_env.AWS_ACCESS_KEY_ID | default(omit) }}"
+    aws_secret_key: "{{ ansible_env.AWS_SECRET_ACCESS_KEY | default(omit) }}"
+    security_token: "{{ ansible_env.AWS_SESSION_TOKEN | default(omit) }}"
+    region: "{{ ansible_env.AWS_DEFAULT_REGION | default(omit) }}"
+    ec2_url: '{{ aws_ec2_url | default(omit) }}'
+    validate_certs: '{{ aws_ssl_enabled }}'
+    image_id: '{{ temp_ami_id }}'
+    wait: true
+    name: "Temporary instance for exporting an AMI"
+    instance_profile_name: '{{ iam_instance_profile | default(omit) }}'
+    key_name: '{{ key_name }}'
+    vpc_subnet_id: '{{ vpc_subnet_id }}'
+    security_groups: "{{ security_groups }}"
+    instance_type: '{{ instance_type }}'
+    ebs_optimized: true
+    availability_zone:
+    volume_size: "{{ volume_size }} + 50"  # Not the right syntax
+    state: running
+  register: temp_instance
+
+- name: Wait for replace instance to finish booting
+  wait_for:
+    timeout: 60
+  delegate_to: localhost
+
+- name: Refetch temp instance info
+  delegate_to: localhost
+  community.aws.ec2_instance_info:
+    aws_access_key: "{{ ansible_env.AWS_ACCESS_KEY_ID | default(omit) }}"
+    aws_secret_key: "{{ ansible_env.AWS_SECRET_ACCESS_KEY | default(omit) }}"
+    security_token: "{{ ansible_env.AWS_SESSION_TOKEN | default(omit) }}"
+    region: "{{ ansible_env.AWS_DEFAULT_REGION | default(omit) }}"
+    ec2_url: '{{ aws_ec2_url | default(omit) }}'
+    validate_certs: '{{ aws_ssl_enabled }}'
+    instance_ids:
+      - '{{ temp_instance.instances[0].instance_id }}'
+  register: temp_instance
+
+- name: Show temp instance info again
+  debug:
+    var: temp_instance
+
+  # TODO: Get the device ID from the vol_info return
+- name: Create EC2 volume from AMI Snapshot and attach to temp instance
+  amazon.aws.ec2_vol:
+    aws_access_key: "{{ ansible_env.AWS_ACCESS_KEY_ID | default(omit) }}"
+    aws_secret_key: "{{ ansible_env.AWS_SECRET_ACCESS_KEY | default(omit) }}"
+    security_token: "{{ ansible_env.AWS_SESSION_TOKEN | default(omit) }}"
+    region: "{{ ansible_env.AWS_DEFAULT_REGION | default(omit) }}"
+    ec2_url: '{{ aws_ec2_url | default(omit) }}'
+    validate_certs: '{{ aws_ssl_enabled }}'
+    instance:
+    snapshot_id: '{{ snapshot_id }}'
+    volume_size:  '{{ volume_size }}'
+    region:
+    availability_zone:
+  register: vol_info
+
+- name: Create a directory on the temp instance
+  ansible.builtin.file:
+    name: "/opt/images"
+    state: directory
+
+- name: Clone the snapshot with dd
+  ansible.builtin.command: 'dd if={{ device }} of=/opt/images/ami.raw bs=4096'
+
+  # TODO: There is not a good way to copy the file from the remote host to S3
+  # without pulling it down and then pushing it up to S3 or using the command module below
+  # This requires an IAM role with s3 permissions be attached to the temp instance
+- name: Copy the AMI RAW file to S3
+  ansible.builtin.command: 'aws s3 cp /opt/images/ami.raw s3://{{ s3_bucket }}/{{ s3_path }}/ami.raw'
