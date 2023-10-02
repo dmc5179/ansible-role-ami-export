@@ -100,9 +100,11 @@
     executable: pip3
     extra_args: --user
 
+  #TODO: Should lookup the device name. Currently copying AMIs with 1 root volume
+  #      so it will always be /dev/nvme1n1
 - name: Clone the snapshot with dd
   become: true
-  ansible.builtin.command: 'dd if=/dev/nvme0n1 of=/opt/images/ami.raw bs=4096'
+  ansible.builtin.command: 'dd if=/dev/nvme1n1 of=/opt/images/ami.raw bs=4096'
 
 - name: Ensure ec2-user can read the file
   become: true
@@ -113,3 +115,18 @@
   # This requires an IAM role with s3 permissions be attached to the temp instance
 - name: Copy the AMI RAW file to S3
   ansible.builtin.command: 'aws s3 cp /opt/images/ami.raw s3://{{ s3_bucket }}/{{ s3_path }}/ami.raw'
+
+  # TODO: Check that the instance terminates and all volumes are deleted
+- name: Terminate the temporary instance
+  delegate_to: localhost
+  amazon.aws.ec2_instance:
+    aws_access_key: "{{ ansible_env.AWS_ACCESS_KEY_ID | default(omit) }}"
+    aws_secret_key: "{{ ansible_env.AWS_SECRET_ACCESS_KEY | default(omit) }}"
+    security_token: "{{ ansible_env.AWS_SESSION_TOKEN | default(omit) }}"
+    region: "{{ ansible_env.AWS_DEFAULT_REGION | default(omit) }}"
+    ec2_url: '{{ aws_ec2_url | default(omit) }}'
+    validate_certs: '{{ aws_ssl_enabled }}'
+    state: absent
+    wait: true
+    instance_ids:
+      - '{{ temp_instance.instances[0].instance_id }}'
