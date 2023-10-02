@@ -14,11 +14,9 @@
   register: ami_info
 
 - name: Set snapshot ID fact
-  ansible.builtin.set_facts:
+  ansible.builtin.set_fact:
     snapshot_id: "{{ ami_info.images[0].block_device_mappings[0].ebs.snapshot_id }}"
     volume_size: "{{ ami_info.images[0].block_device_mappings[0].ebs.volume_size }}"
-
-- fail:
 
 - name: Create temp instance
   delegate_to: localhost
@@ -32,14 +30,23 @@
     image_id: '{{ temp_ami_id }}'
     wait: true
     name: "Temporary instance for exporting an AMI"
-    instance_profile_name: '{{ iam_instance_profile | default(omit) }}'
+    instance_role: '{{ iam_instance_profile }}'
     key_name: '{{ key_name }}'
     vpc_subnet_id: '{{ vpc_subnet_id }}'
     security_groups: "{{ security_groups }}"
     instance_type: '{{ instance_type }}'
     ebs_optimized: true
-    availability_zone:
-    volume_size: "{{ volume_size }} + 50"  # Not the right syntax
+    network:
+      assign_public_ip: true
+    volumes:
+      - device_name: /dev/sda1
+        ebs:
+          volume_size: 50
+          delete_on_termination: true
+      - device_name: /dev/xvdg
+        ebs:
+          snapshot_id: "{{ snapshot_id }}"
+          delete_on_termination: true
     state: running
   register: temp_instance
 
@@ -65,29 +72,40 @@
   debug:
     var: temp_instance
 
-  # TODO: Get the device ID from the vol_info return
-- name: Create EC2 volume from AMI Snapshot and attach to temp instance
-  amazon.aws.ec2_vol:
-    aws_access_key: "{{ ansible_env.AWS_ACCESS_KEY_ID | default(omit) }}"
-    aws_secret_key: "{{ ansible_env.AWS_SECRET_ACCESS_KEY | default(omit) }}"
-    security_token: "{{ ansible_env.AWS_SESSION_TOKEN | default(omit) }}"
-    region: "{{ ansible_env.AWS_DEFAULT_REGION | default(omit) }}"
-    ec2_url: '{{ aws_ec2_url | default(omit) }}'
-    validate_certs: '{{ aws_ssl_enabled }}'
-    instance:
-    snapshot_id: '{{ snapshot_id }}'
-    volume_size:  '{{ volume_size }}'
-    region:
-    availability_zone:
-  register: vol_info
+  # Get the name of the device created for the AMI snapshot ID
+- name: Set device name and ansible_hostname facts
+  ansible.builtin.set_fact:
+    device_name: "{{ temp_instance.instances[0].block_device_mappings[1].device_name }}"
+    inventory_hostname: "{{ temp_instance.instances[0].public_dns_name }}"
 
 - name: Create a directory on the temp instance
+  become: true
   ansible.builtin.file:
     name: "/opt/images"
     state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Install python3 for the aws cli
+  become: true
+  ansible.builtin.dnf:
+    name: python3
+    state: latest
+
+- name: Install aws cli python3 module for ec2-user
+  ansible.builtin.pip:
+    name: awscli
+    executable: pip3
+    extra_args: --user
 
 - name: Clone the snapshot with dd
-  ansible.builtin.command: 'dd if={{ device }} of=/opt/images/ami.raw bs=4096'
+  become: true
+  ansible.builtin.command: 'dd if=/dev/nvme0n1 of=/opt/images/ami.raw bs=4096'
+
+- name: Ensure ec2-user can read the file
+  become: true
+  ansible.builtin.command: 'chmod 0644 /opt/images/ami.raw'
 
   # TODO: There is not a good way to copy the file from the remote host to S3
   # without pulling it down and then pushing it up to S3 or using the command module below
