@@ -14,6 +14,7 @@
   register: ami_info
 
 - name: Set snapshot ID fact
+  delegate_to: localhost
   ansible.builtin.set_fact:
     snapshot_id: "{{ ami_info.images[0].block_device_mappings[0].ebs.snapshot_id }}"
     volume_size: "{{ ami_info.images[0].block_device_mappings[0].ebs.volume_size }}"
@@ -51,9 +52,9 @@
   register: temp_instance
 
 - name: Wait for replace instance to finish booting
+  delegate_to: localhost
   wait_for:
     timeout: 60
-  delegate_to: localhost
 
 - name: Refetch temp instance info
   delegate_to: localhost
@@ -73,10 +74,10 @@
     var: temp_instance
 
   # Get the name of the device created for the AMI snapshot ID
-- name: Set device name and ansible_hostname facts
+- name: Set device name and ansible_ssh_host facts
   ansible.builtin.set_fact:
     device_name: "{{ temp_instance.instances[0].block_device_mappings[1].device_name }}"
-    inventory_hostname: "{{ temp_instance.instances[0].public_dns_name }}"
+    ansible_ssh_host: "{{ temp_instance.instances[0].public_dns_name }}"
 
 - name: Create a directory on the temp instance
   become: true

@@ -2,19 +2,20 @@
 # defaults file for ami-export
 
 # Temp instance AMI ID
-temp_ami_id: 'ami-08dcb4ebbc71a3c8e'
+temp_ami_id: ''
 instance_type: 'm5.xlarge'
-#instance_profile_name: ''
+iam_instance_profile: 's3admin-role'
 key_name: ''
 vpc_subnet_id: ''
-security_groups: '' 
+security_groups:
+  - 'default'
 availability_zone: ''
 
 # AMI to export to S3
-ami_id: 'ami-08dcb4ebbc71a3c8e'
+ami_id: ''
 
 # S3 bucket for export
-s3_bucket: 'redhat-dan'
+s3_bucket: ''
 
 # Path in S3 bucket
 s3_path: '/ami_exports'
