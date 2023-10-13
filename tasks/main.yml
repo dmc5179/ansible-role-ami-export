@@ -42,19 +42,36 @@
     volumes:
       - device_name: /dev/sda1
         ebs:
-          volume_size: 50
+          volume_size: '{{ 100|int + volume_size|int }}'
           delete_on_termination: true
-      - device_name: /dev/xvdg
-        ebs:
-          snapshot_id: "{{ snapshot_id }}"
-          delete_on_termination: true
+# Note: Do not add the snapshot to clone here
+# there is no guaranteed order in the device mounting
+#      - device_name: /dev/xvdg
+#        ebs:
+#          snapshot_id: "{{ snapshot_id }}"
+#          delete_on_termination: true
     state: running
   register: temp_instance
 
 - name: Wait for replace instance to finish booting
   delegate_to: localhost
   wait_for:
-    timeout: 60
+    timeout: 120
+
+  #Note: Done separately to guarantee device name and order
+- name: Attach snapshot to clone to temp instance
+  delegate_to: localhost
+  amazon.aws.ec2_vol:
+    aws_access_key: "{{ ansible_env.AWS_ACCESS_KEY_ID | default(omit) }}"
+    aws_secret_key: "{{ ansible_env.AWS_SECRET_ACCESS_KEY | default(omit) }}"
+    security_token: "{{ ansible_env.AWS_SESSION_TOKEN | default(omit) }}"
+    region: "{{ ansible_env.AWS_DEFAULT_REGION | default(omit) }}"
+    ec2_url: '{{ aws_ec2_url | default(omit) }}'
+    validate_certs: '{{ aws_ssl_enabled }}'
+    instance: '{{ temp_instance.instances[0].instance_id }}'
+    snapshot: '{{ snapshot_id }}'
+    device_name: "/dev/sdf"
+    delete_on_termination: true
 
 - name: Refetch temp instance info
   delegate_to: localhost
