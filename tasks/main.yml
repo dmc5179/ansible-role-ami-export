@@ -114,6 +114,12 @@
     name: python3
     state: latest
 
+- name: Install python3-pip for the aws cli
+  become: true
+  ansible.builtin.dnf:
+    name: python3-pip
+    state: latest
+
 - name: Install aws cli python3 module for ec2-user
   ansible.builtin.pip:
     name: awscli
@@ -124,7 +130,7 @@
   #      so it will always be /dev/nvme1n1
 - name: Clone the snapshot with dd
   become: true
-  ansible.builtin.command: 'dd if=/dev/nvme1n1 of=/opt/images/{{ ami_id }}.raw bs=1M'
+  ansible.builtin.command: 'dd if=/dev/nvme1n1 of=/opt/images/{{ ami_id }}.raw bs=128M'
 
 - name: Ensure ec2-user can read the file
   become: true
