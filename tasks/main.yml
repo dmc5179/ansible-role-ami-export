@@ -134,7 +134,11 @@
 
 - name: Ensure ec2-user can read the file
   become: true
-  ansible.builtin.command: 'chmod 0644 /opt/images/{{ ami_id }}.raw'
+  ansible.builtin.file:
+    path: "/opt/images/{{ ami_id }}.raw"
+    owner: root
+    group: root
+    mode: '0644'
 
   # TODO: There is not a good way to copy the file from the remote host to S3
   # without pulling it down and then pushing it up to S3 or using the command module below
