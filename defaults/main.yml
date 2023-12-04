@@ -3,7 +3,7 @@
 
 # Temp instance AMI ID
 temp_ami_id: ''
-instance_type: 'm5.xlarge'
+instance_type: 'm5.2xlarge'
 iam_instance_profile: 's3admin-role'
 key_name: ''
 vpc_subnet_id: ''
