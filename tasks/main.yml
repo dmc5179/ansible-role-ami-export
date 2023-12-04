@@ -46,12 +46,6 @@
           volume_size: '{{ 100|int + volume_size|int }}'
           volume_type: gp3
           delete_on_termination: true
-# Note: Do not add the snapshot to clone here
-# there is no guaranteed order in the device mounting
-#      - device_name: /dev/xvdg
-#        ebs:
-#          snapshot_id: "{{ snapshot_id }}"
-#          delete_on_termination: true
     state: running
   register: temp_instance
 
