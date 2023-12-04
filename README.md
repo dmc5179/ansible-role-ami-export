@@ -39,8 +39,7 @@ Example Playbook
 ----------------
 
 ```
-ansible-playbook -i test/inventory \
-        --extra-vars \
+ansible-playbook --extra-vars \
         "s3_bucket= s3_path= ami_id= temp_ami_id= key_name= vpc_subnet_id= security_groups=" \
         tests/test.yml
 ```
