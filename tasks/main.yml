@@ -126,6 +126,12 @@
     executable: pip3
     extra_args: --user
 
+- name: Install aws cli python3 module for ec2-user
+  ansible.builtin.pip:
+    name: boto3
+    executable: pip3
+    extra_args: --user
+
   #TODO: Should lookup the device name. Currently copying AMIs with 1 root volume
   #      so it will always be /dev/nvme1n1
 - name: Clone the snapshot with dd
@@ -144,7 +150,11 @@
   # without pulling it down and then pushing it up to S3 or using the command module below
   # This requires an IAM role with s3 permissions be attached to the temp instance
 - name: Copy the AMI RAW file to S3
-  ansible.builtin.command: 'aws s3 cp /opt/images/{{ ami_id }}.raw s3://{{ s3_bucket }}/{{ s3_path }}/{{ ami_id }}.raw'
+  amazon.aws.s3_object:
+    bucket: "{{ s3_bucket }}"
+    object: "/{{ s3_path }}/{{ ami_id }}.raw"
+    src: "/opt/images/{{ ami_id }}.raw"
+    mode: put
 
   # TODO: Check that the instance terminates and all volumes are deleted
 - name: Terminate the temporary instance
